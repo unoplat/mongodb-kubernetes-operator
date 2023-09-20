@@ -17,6 +17,7 @@ import (
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/authentication/authtypes"
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/automationconfig"
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/kube/annotations"
+
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/util/constants"
 	"github.com/mongodb/mongodb-kubernetes-operator/pkg/util/scale"
 	"github.com/stretchr/objx"
@@ -93,6 +94,9 @@ type MongoDBCommunitySpec struct {
 	// Security configures security features, such as TLS, and authentication settings for a deployment
 	// +required
 	Security Security `json:"security"`
+
+	//todo: add ",omitempty"
+	PodAnnotations map[string]string `json:"podAnnotations,omitempty"`
 
 	// Users specifies the MongoDB users that should be configured in your deployment
 	// +required

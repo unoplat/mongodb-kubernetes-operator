@@ -126,10 +126,12 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		return result.Failed()
 	}
 
+	//customAnnotations := mdb.Spec.PodAnnotations
+
 	r.log = zap.S().With("ReplicaSet", request.NamespacedName)
 	r.log.Infof("Reconciling MongoDB")
 
-	r.log.Debug("Validating MongoDB.Spec")
+	r.log.Info("Validating MongoDB.Spec")
 	err, lastAppliedSpec := r.validateSpec(mdb)
 	if err != nil {
 		return status.Update(r.client.Status(), &mdb,
@@ -139,7 +141,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		)
 	}
 
-	r.log.Debug("Ensuring the service exists")
+	r.log.Info("Ensuring the service exists")
 	if err := r.ensureService(mdb); err != nil {
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
@@ -147,7 +149,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 				withFailedPhase(),
 		)
 	}
-
+	r.log.Info("Before validating TLS config")
 	isTLSValid, err := r.validateTLSConfig(mdb)
 	if err != nil {
 		return status.Update(r.client.Status(), &mdb,
@@ -173,6 +175,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		)
 	}
 
+	r.log.Info("Before ensuring Prometheus TLS resources")
 	if err := r.ensurePrometheusTLSResources(mdb); err != nil {
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
@@ -181,6 +184,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		)
 	}
 
+	r.log.Info("Before ensuring User resources")
 	if err := r.ensureUserResources(mdb); err != nil {
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
@@ -189,6 +193,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		)
 	}
 
+	r.log.Info("Before deploying MongoDB ReplicaSet")
 	ready, err := r.deployMongoDBReplicaSet(mdb)
 	if err != nil {
 		return status.Update(r.client.Status(), &mdb,
@@ -206,7 +211,7 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		)
 	}
 
-	r.log.Debug("Resetting StatefulSet UpdateStrategy to RollingUpdate")
+	r.log.Info("Resetting StatefulSet UpdateStrategy to RollingUpdate")
 	if err := statefulset.ResetUpdateStrategy(&mdb, r.client); err != nil {
 		return status.Update(r.client.Status(), &mdb,
 			statusOptions().
@@ -252,9 +257,15 @@ func (r ReplicaSetReconciler) Reconcile(ctx context.Context, request reconcile.R
 		r.cleanupPemSecret(mdb.Spec, *lastAppliedSpec, mdb.Namespace)
 	}
 
+	r.log.Info("Updating last successful configuration")
 	if err := r.updateLastSuccessfulConfiguration(mdb); err != nil {
 		r.log.Errorf("Could not save current spec as an annotation: %s", err)
 	}
+
+	// if err := annotations.SetAnnotations(&mdb, customAnnotations, r.client); err != nil {
+	// 	// handle error
+	// 	r.log.Errorf("Could not apply custom pod annotations: %s", err)
+	// }
 
 	if res.RequeueAfter > 0 || res.Requeue {
 		r.log.Info("Requeuing reconciliation")
@@ -274,10 +285,12 @@ func (r *ReplicaSetReconciler) updateLastSuccessfulConfiguration(mdb mdbv1.Mongo
 
 	specAnnotations := map[string]string{
 		lastSuccessfulConfiguration: string(currentSpec),
-		// the last version will be duplicated in two annotations.
-		// This is needed to reuse the update strategy logic in enterprise
-		lastAppliedMongoDBVersion: mdb.Spec.Version,
+		lastAppliedMongoDBVersion:   mdb.Spec.Version,
 	}
+
+	r.log.Infof("Updating last successful configuration...")
+	r.log.Infof("Spec Annotations: %v", specAnnotations)
+
 	return annotations.SetAnnotations(&mdb, specAnnotations, r.client)
 }
 
@@ -760,6 +773,7 @@ func buildStatefulSetModificationFunction(mdb mdbv1.MongoDBCommunity) statefulse
 				buildTLSPodSpecModification(mdb),
 				buildTLSPrometheus(mdb),
 				buildAgentX509(mdb),
+				podtemplatespec.WithAnnotations(mdb.Spec.PodAnnotations), // This is the new Modification function you are adding
 			),
 		),
 

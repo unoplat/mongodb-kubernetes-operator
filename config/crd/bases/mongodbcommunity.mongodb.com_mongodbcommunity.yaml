@@ -188,6 +188,11 @@ spec:
               members:
                 description: Members is the number of members in the replica set
                 type: integer
+              podAnnotations:
+                additionalProperties:
+                  type: string
+                description: 'todo: add ",omitempty"'
+                type: object
               prometheus:
                 description: Prometheus configurations.
                 properties:
